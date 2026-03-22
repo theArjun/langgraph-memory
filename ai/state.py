@@ -10,7 +10,6 @@ def _keep_last(existing: list, new: list) -> list:
 
 
 class ChatBotState(TypedDict):
-    memory_context: str
     messages: Annotated[list[AnyMessage], _keep_last]
     user_query: str
 

@@ -8,6 +8,19 @@ logger = get_logger(__name__)
 
 
 @tool
+def retrieve_memories(query: str, config: RunnableConfig) -> str:
+    """Retrieve stored memories about the user relevant to a query.
+    Call this at the start of a conversation or when past context would help personalize the response."""
+    user_id = config["configurable"]["user_id"]
+    memories = store_manager.search(user_id, query=query)
+    if not memories:
+        return "No memories found."
+    lines = [f"[key={m.key}] {m.value.get('text', '')}" for m in memories]
+    logger.info("Tool: retrieved %d memories for user=%s", len(memories), user_id)
+    return "\n".join(lines)
+
+
+@tool
 def update_memory(key: str, updated_fact: str, config: RunnableConfig) -> str:
     """Update an existing memory with a corrected fact.
     Use when the user corrects or changes previously stored information.
@@ -29,6 +42,6 @@ def delete_memory(key: str, config: RunnableConfig) -> str:
     return f"Deleted memory '{key}'"
 
 
-memory_tools = [update_memory, delete_memory]
+memory_tools = [retrieve_memories, update_memory, delete_memory]
 
 __all__ = ["memory_tools"]

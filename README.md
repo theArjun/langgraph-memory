@@ -8,22 +8,22 @@ Each conversation runs through the following graph:
 
 ![Graph](graph.png)
 
-1. **retrieve_memories** — searches the store for previously saved facts about the user using `user_query` as the semantic search query; memory context includes memory keys so the LLM can reference them in tool calls
-2. **chatbot** — calls GPT-4o (with tools bound) using the retrieved memory context and `user_query`; on re-entry after tool execution, appends tool call/result messages so the LLM can produce a final response
-3. **tools** *(conditional)* — executes `update_memory` or `delete_memory` tool calls made by the chatbot, then loops back to chatbot for the final response
-4. **extract_and_save** — uses structured output to extract new facts from `user_query` + last AI response and saves them to the store
-5. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+1. **chatbot** — calls GPT-4o with all three memory tools available; decides dynamically whether to retrieve, update, or delete memories based on the user's message
+2. **tools** *(conditional)* — executes whichever tool(s) the chatbot called, then loops back to chatbot for the final response
+3. **extract_and_save** — uses structured output to extract new facts from `user_query` + last AI response and saves them to the store
+4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
 
 ### Memory tools
 
-The chatbot has two tools it can call when the user's intent requires it:
+All three tools are bound to the LLM and called only when needed:
 
-| Tool | Description |
+| Tool | When called |
 |---|---|
-| `update_memory(key, updated_fact)` | Overwrites an existing memory. Called when the user corrects previously stored information. |
-| `delete_memory(key)` | Removes a stored memory. Called when the user explicitly asks to forget something. |
+| `retrieve_memories(query)` | When past context would help personalize the response |
+| `update_memory(key, updated_fact)` | When the user corrects previously stored information |
+| `delete_memory(key)` | When the user explicitly asks to forget something |
 
-Tools are only invoked when needed — normal conversation turns make no tool calls.
+Memory retrieval is dynamic — the chatbot decides whether context is needed rather than fetching it unconditionally on every turn.
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
 
@@ -37,16 +37,15 @@ ai/
   store.py            # StoreManager (save/update/delete/search) + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
   state.py            # ChatBotState TypedDict (messages capped at last 3 via custom reducer)
   structures.py       # Pydantic models: UserMemory, MemoryUpdate, MemoryDelete
-  tools.py            # LangChain @tool definitions: update_memory, delete_memory
+  tools.py            # LangChain @tool definitions: retrieve_memories, update_memory, delete_memory
   config.py           # Loads .env with override=True
   models.py           # LLM and embedding model name constants
   logger.py           # Shared get_logger() factory
   prompts/
     loader.py             # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
-    chatbot.yaml          # System prompt with {% if memory_context %} branch
+    chatbot.yaml          # System prompt explaining available memory tools
     extract_and_save.yaml # System + user prompt for fact extraction
   nodes/
-    retrieve_memories.py  # Searches store; formats context with memory keys for tool use
     chatbot.py            # Invokes LLM with tools bound; handles tool re-entry loop
     extract_and_save.py   # Extracts facts from user_query + last AI response; saves via StoreManager
     clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run

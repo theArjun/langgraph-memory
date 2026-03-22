@@ -4,8 +4,7 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from .logger import get_logger
-from .nodes import (chatbot, clear_checkpoints, extract_and_save,
-                    retrieve_memories)
+from .nodes import chatbot, clear_checkpoints, extract_and_save
 from .state import ChatBotState
 from .store import checkpointer, store_manager
 from .tools import memory_tools
@@ -14,7 +13,6 @@ logger = get_logger(__name__)
 
 
 class GraphNodes:
-    RETRIEVE_MEMORIES = "retrieve_memories"
     CHATBOT = "chatbot"
     TOOLS = "tools"
     EXTRACT_AND_SAVE = "extract_and_save"
@@ -32,14 +30,12 @@ def _build_graph():
     logger.info("Building graph")
     builder = StateGraph(ChatBotState)
 
-    builder.add_node(GraphNodes.RETRIEVE_MEMORIES, retrieve_memories)
     builder.add_node(GraphNodes.CHATBOT, chatbot)
     builder.add_node(GraphNodes.TOOLS, ToolNode(memory_tools))
     builder.add_node(GraphNodes.EXTRACT_AND_SAVE, extract_and_save)
     builder.add_node(GraphNodes.CLEAR_CHECKPOINTS, clear_checkpoints)
 
-    builder.add_edge(START, GraphNodes.RETRIEVE_MEMORIES)
-    builder.add_edge(GraphNodes.RETRIEVE_MEMORIES, GraphNodes.CHATBOT)
+    builder.add_edge(START, GraphNodes.CHATBOT)
     builder.add_conditional_edges(GraphNodes.CHATBOT, _should_use_tools)
     builder.add_edge(GraphNodes.TOOLS, GraphNodes.CHATBOT)
     builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, GraphNodes.CLEAR_CHECKPOINTS)
