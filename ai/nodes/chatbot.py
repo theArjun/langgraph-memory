@@ -2,7 +2,10 @@ from langchain.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from ..llm import llm
+from ..logger import get_logger
 from ..state import ChatBotState
+
+logger = get_logger(__name__)
 
 
 def chatbot(state: ChatBotState, config: RunnableConfig):
@@ -25,6 +28,9 @@ def chatbot(state: ChatBotState, config: RunnableConfig):
         *state["messages"],
     ]
 
+    logger.info(
+        "Invoking LLM with memory_context=%s", "present" if memory_context else "absent"
+    )
     response = llm.invoke(messages)
     return {
         "messages": [response],

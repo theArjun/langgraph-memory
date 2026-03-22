@@ -1,7 +1,10 @@
 from langchain_core.runnables import RunnableConfig
 
+from ..logger import get_logger
 from ..state import ChatBotState
 from ..store import store_manager
+
+logger = get_logger(__name__)
 
 
 def retrieve_memories(state: ChatBotState, config: RunnableConfig):
@@ -18,4 +21,5 @@ def retrieve_memories(state: ChatBotState, config: RunnableConfig):
         ]
         memory_context = "\n".join(memory_texts)
 
+    logger.info("Retrieved %d memories for user=%s", len(memories), user_id)
     return {"memory_context": memory_context}

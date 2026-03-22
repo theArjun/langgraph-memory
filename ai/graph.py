@@ -2,9 +2,12 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
+from .logger import get_logger
 from .nodes import chatbot, extract_and_save, retrieve_memories
 from .state import ChatBotState
 from .store import store_manager
+
+logger = get_logger(__name__)
 
 
 class GraphNodes:
@@ -14,6 +17,7 @@ class GraphNodes:
 
 
 def _build_graph():
+    logger.info("Building graph")
     builder = StateGraph(ChatBotState)
 
     builder.add_node(GraphNodes.EXTRACT_AND_SAVE, extract_and_save)
@@ -38,6 +42,7 @@ class GraphManager:
         return cls._instance
 
     def invoke(self, user_id: str, thread_id: str, message: str) -> str:
+        logger.info("Invoking graph for user=%s thread=%s", user_id, thread_id)
         config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
         result = self._graph.invoke(
             {"messages": [HumanMessage(content=message)]},

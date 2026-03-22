@@ -3,6 +3,9 @@ from datetime import datetime
 from langgraph.store.memory import InMemoryStore
 
 from .embeddings import embeddings
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 SIMILARITY_THRESHOLD = 0.90
 
@@ -20,6 +23,12 @@ class StoreManager:
     def save(self, user_id: str, fact: str) -> bool:
         similar = self._store.search(self._namespace(user_id), query=fact, limit=1)
         if similar and similar[0].score >= SIMILARITY_THRESHOLD:
+            logger.debug(
+                "Skipping duplicate fact for %s (score=%.2f): %s",
+                user_id,
+                similar[0].score,
+                fact,
+            )
             return False
 
         now = datetime.now()
@@ -32,6 +41,7 @@ class StoreManager:
                 "source": "conversation",
             },
         )
+        logger.info("Saved new fact for %s: %s", user_id, fact)
         return True
 
 

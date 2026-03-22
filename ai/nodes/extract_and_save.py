@@ -1,9 +1,12 @@
 from langchain_core.runnables import RunnableConfig
 
 from ..llm import llm
+from ..logger import get_logger
 from ..state import ChatBotState
 from ..store import store_manager
 from ..structures import UserMemory
+
+logger = get_logger(__name__)
 
 
 def extract_and_save(state: ChatBotState, config: RunnableConfig):
@@ -47,6 +50,11 @@ def extract_and_save(state: ChatBotState, config: RunnableConfig):
         store_manager.save(user_id, fact) for fact in result.facts if fact
     )
 
-    print(f"Stored {stored_count} new facts for user {user_id}")
+    logger.info(
+        "Extracted %d facts, stored %d new for user=%s",
+        len(result.facts),
+        stored_count,
+        user_id,
+    )
 
     return state
