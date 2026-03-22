@@ -25,4 +25,12 @@ if __name__ == "__main__":
         config=config,
     )
     ai_response = result["messages"][-1].content
+
+    user_query_3 = "What could be my hobbies ?"
+    result = graph.invoke(
+        {"messages": [HumanMessage(content=user_query_3)]},
+        config=config,
+    )
+    ai_response = result["messages"][-1].content
+
     print(ai_response)

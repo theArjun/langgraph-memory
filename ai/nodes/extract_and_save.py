@@ -1,29 +1,21 @@
-from datetime import datetime
-
 from langchain_core.runnables import RunnableConfig
-from langgraph.store.base import BaseStore
 
 from ..llm import llm
 from ..state import ChatBotState
+from ..store import store_manager
 from ..structures import UserMemory
 
 
-def extract_and_save(state: ChatBotState, config: RunnableConfig, store: BaseStore):
+def extract_and_save(state: ChatBotState, config: RunnableConfig):
     user_id = config["configurable"]["user_id"]
-    namespace = (user_id, "memories")
 
     if len(state["messages"]) < 2:
-        print("not enough messages")
         return state
 
     ai_responses = [m for m in state["messages"] if m.type == "ai"]
-
     user_messages = [m for m in state["messages"] if m.type == "human"]
 
-    if not ai_responses:
-        return state
-
-    if not user_messages:
+    if not ai_responses or not user_messages:
         return state
 
     last_user_message = user_messages[-1].content
@@ -49,28 +41,12 @@ def extract_and_save(state: ChatBotState, config: RunnableConfig, store: BaseSto
     - We had a conversation
     - The user asked a question"""
 
-    structured_llm = llm.with_structured_output(UserMemory)
+    result = llm.with_structured_output(UserMemory).invoke(extract_prompt)
 
-    result = structured_llm.invoke(extract_prompt)
+    stored_count = sum(
+        store_manager.save(user_id, fact) for fact in result.facts if fact
+    )
 
-    stored_count = 0
-    for fact in result.facts:
-        if not fact:
-            continue
-
-        now = datetime.now()
-        memory_key = f"memory_{now.strftime('%Y%m%d_T%H%M%S')}"
-        store.put(
-            namespace=namespace,
-            key=memory_key,
-            value={
-                "text": fact,
-                "timestamp": now.isoformat(),
-                "source": "conversation",
-            },
-        )
-        stored_count += 1
-
-    print(f"Stored {stored_count} facts for user {user_id}")
+    print(f"Stored {stored_count} new facts for user {user_id}")
 
     return state

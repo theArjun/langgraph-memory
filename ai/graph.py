@@ -3,7 +3,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .nodes import chatbot, extract_and_save, retrieve_memories
 from .state import ChatBotState
-from .store import store
+from .store import store_manager
 
 
 class GraphNodes:
@@ -26,7 +26,7 @@ builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, END)
 checkpointer = MemorySaver()
 
 
-graph = builder.compile(checkpointer=checkpointer, store=store)
+graph = builder.compile(checkpointer=checkpointer, store=store_manager._store)
 
 
 __all__ = [
