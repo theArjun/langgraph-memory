@@ -2,7 +2,7 @@ from langgraph.graph import END, START, StateGraph
 from langsmith import traceable
 
 from .logger import get_logger
-from .nodes import chatbot, extract_and_save, retrieve_memories
+from .nodes import chatbot, clear_checkpoints, extract_and_save, retrieve_memories
 from .state import ChatBotState
 from .store import checkpointer, store_manager
 
@@ -13,6 +13,7 @@ class GraphNodes:
     EXTRACT_AND_SAVE = "extract_and_save"
     CHATBOT = "chatbot"
     RETRIEVE_MEMORIES = "retrieve_memories"
+    CLEAR_CHECKPOINTS = "clear_checkpoints"
 
 
 def _build_graph():
@@ -22,11 +23,13 @@ def _build_graph():
     builder.add_node(GraphNodes.EXTRACT_AND_SAVE, extract_and_save)
     builder.add_node(GraphNodes.CHATBOT, chatbot)
     builder.add_node(GraphNodes.RETRIEVE_MEMORIES, retrieve_memories)
+    builder.add_node(GraphNodes.CLEAR_CHECKPOINTS, clear_checkpoints)
 
     builder.add_edge(START, GraphNodes.RETRIEVE_MEMORIES)
     builder.add_edge(GraphNodes.RETRIEVE_MEMORIES, GraphNodes.CHATBOT)
     builder.add_edge(GraphNodes.CHATBOT, GraphNodes.EXTRACT_AND_SAVE)
-    builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, END)
+    builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, GraphNodes.CLEAR_CHECKPOINTS)
+    builder.add_edge(GraphNodes.CLEAR_CHECKPOINTS, END)
 
     return builder.compile(checkpointer=checkpointer, store=store_manager._store)
 

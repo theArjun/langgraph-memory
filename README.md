@@ -9,8 +9,9 @@ Each conversation runs through a three-node graph:
 ![Graph](graph.png)
 
 1. **retrieve_memories** — searches the store for previously saved facts about the user using semantic similarity
-2. **chatbot** — calls GPT-4o with the retrieved memory context to produce a personalized response; message history is trimmed to 100k tokens before sending to avoid context overflow
+2. **chatbot** — calls GPT-4o with the retrieved memory context to produce a personalized response
 3. **extract_and_save** — uses structured output to extract new facts from the last exchange and saves them to the store
+4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
 
@@ -29,9 +30,11 @@ ai/
   logger.py           # Shared get_logger() factory
   nodes/
     retrieve_memories.py  # Searches store for user facts via StoreManager
-    chatbot.py            # Invokes LLM with memory context and trimmed message history
+    chatbot.py            # Invokes LLM with memory context
     extract_and_save.py   # Extracts and stores new facts via StoreManager
+    clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
 main.py               # Entry point
+visualize_graph.py    # Renders the graph as graph.png
 ```
 
 ## Setup
