@@ -8,22 +8,20 @@ Each conversation runs through the following graph:
 
 ![Graph](graph.png)
 
-1. **chatbot** — calls GPT-4o with all three memory tools available; decides dynamically whether to retrieve, update, or delete memories based on the user's message
+1. **chatbot** — calls GPT-4o with all four memory tools available; decides dynamically whether to retrieve, save, update, or delete memories based on the user's message
 2. **tools** *(conditional)* — executes whichever tool(s) the chatbot called, then loops back to chatbot for the final response
-3. **extract_and_save** — uses structured output to extract new facts from `user_query` + last AI response and saves them to the store
-4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+3. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
 
 ### Memory tools
 
-All three tools are bound to the LLM and called only when needed:
+All tools are bound to the LLM and called only when needed:
 
 | Tool | When called |
 |---|---|
 | `retrieve_memories(query)` | When past context would help personalize the response |
+| `save_memory(fact)` | When the user shares personal information worth remembering |
 | `update_memory(key, updated_fact)` | When the user corrects previously stored information |
 | `delete_memory(key)` | When the user explicitly asks to forget something |
-
-Memory retrieval is dynamic — the chatbot decides whether context is needed rather than fetching it unconditionally on every turn.
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
 
@@ -35,19 +33,17 @@ ai/
   llm.py              # ChatOpenAI instance (GPT-4o)
   embeddings.py       # OpenAI embeddings instance (text-embedding-3-small)
   store.py            # StoreManager (save/update/delete/search) + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
-  state.py            # ChatBotState TypedDict (messages capped at last 3 via custom reducer)
-  structures.py       # Pydantic models: UserMemory, MemoryUpdate, MemoryDelete
-  tools.py            # LangChain @tool definitions: retrieve_memories, update_memory, delete_memory
+  state.py            # ChatBotState TypedDict (messages capped at last 20 via custom reducer)
+  structures.py       # Pydantic models for structured LLM output
+  tools.py            # LangChain @tool definitions: retrieve_memories, save_memory, update_memory, delete_memory
   config.py           # Loads .env with override=True
   models.py           # LLM and embedding model name constants
   logger.py           # Shared get_logger() factory
   prompts/
-    loader.py             # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
-    chatbot.yaml          # System prompt explaining available memory tools
-    extract_and_save.yaml # System + user prompt for fact extraction
+    loader.py         # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
+    chatbot.yaml      # System prompt listing available memory tools
   nodes/
-    chatbot.py            # Invokes LLM with tools bound; handles tool re-entry loop
-    extract_and_save.py   # Extracts facts from user_query + last AI response; saves via StoreManager
+    chatbot.py        # Invokes LLM with tools bound; handles tool re-entry loop
     clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
 main.py               # Entry point — interactive REPL loop
 visualize_graph.py    # Renders the graph as graph.png

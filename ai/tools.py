@@ -42,6 +42,16 @@ def delete_memory(key: str, config: RunnableConfig) -> str:
     return f"Deleted memory '{key}'"
 
 
-memory_tools = [retrieve_memories, update_memory, delete_memory]
+@tool
+def save_memory(fact: str, config: RunnableConfig) -> str:
+    """Save a new fact about the user to memory.
+    Call this when the user shares personal information worth remembering for future conversations."""
+    user_id = config["configurable"]["user_id"]
+    saved = store_manager.save(user_id, fact)
+    logger.info("Tool: save_memory for user=%s saved=%s fact=%s", user_id, saved, fact)
+    return f"Saved: {fact}" if saved else f"Already known: {fact}"
+
+
+memory_tools = [retrieve_memories, save_memory, update_memory, delete_memory]
 
 __all__ = ["memory_tools"]

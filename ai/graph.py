@@ -4,7 +4,7 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from .logger import get_logger
-from .nodes import chatbot, clear_checkpoints, extract_and_save
+from .nodes import chatbot, clear_checkpoints
 from .state import ChatBotState
 from .store import checkpointer, store_manager
 from .tools import memory_tools
@@ -15,7 +15,6 @@ logger = get_logger(__name__)
 class GraphNodes:
     CHATBOT = "chatbot"
     TOOLS = "tools"
-    EXTRACT_AND_SAVE = "extract_and_save"
     CLEAR_CHECKPOINTS = "clear_checkpoints"
 
 
@@ -23,7 +22,7 @@ def _should_use_tools(state: ChatBotState):
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
         return GraphNodes.TOOLS
-    return GraphNodes.EXTRACT_AND_SAVE
+    return GraphNodes.CLEAR_CHECKPOINTS
 
 
 def _build_graph():
@@ -32,13 +31,11 @@ def _build_graph():
 
     builder.add_node(GraphNodes.CHATBOT, chatbot)
     builder.add_node(GraphNodes.TOOLS, ToolNode(memory_tools))
-    builder.add_node(GraphNodes.EXTRACT_AND_SAVE, extract_and_save)
     builder.add_node(GraphNodes.CLEAR_CHECKPOINTS, clear_checkpoints)
 
     builder.add_edge(START, GraphNodes.CHATBOT)
     builder.add_conditional_edges(GraphNodes.CHATBOT, _should_use_tools)
     builder.add_edge(GraphNodes.TOOLS, GraphNodes.CHATBOT)
-    builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, GraphNodes.CLEAR_CHECKPOINTS)
     builder.add_edge(GraphNodes.CLEAR_CHECKPOINTS, END)
 
     return builder.compile(checkpointer=checkpointer, store=store_manager._store)
