@@ -1,6 +1,6 @@
 # LangGraph Memory
 
-A conversational AI chatbot that extracts and persists facts about users across interactions using LangGraph's in-memory store with semantic search.
+A conversational AI chatbot that extracts and persists facts about users across interactions using LangGraph with PostgreSQL-backed checkpointing and memory store.
 
 ## How it works
 
@@ -11,8 +11,8 @@ retrieve_memories → chatbot → extract_and_save
 ```
 
 1. **retrieve_memories** — searches the store for previously saved facts about the user using semantic similarity
-2. **chatbot** — calls GPT-4o with the retrieved memory context to produce a personalized response
-3. **extract_and_save** — uses structured output to extract new facts from the conversation and saves them to the store
+2. **chatbot** — calls GPT-4o with the retrieved memory context to produce a personalized response; message history is trimmed to 100k tokens before sending to avoid context overflow
+3. **extract_and_save** — uses structured output to extract new facts from the last exchange and saves them to the store
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
 
@@ -21,32 +21,24 @@ Facts are stored under a per-user namespace `(user_id, "memories")` and embedded
 ```
 ai/
   graph.py            # GraphManager singleton — builds and compiles the graph
-  llm.py              # ChatOpenAI instance
+  llm.py              # ChatOpenAI instance (GPT-4o)
   embeddings.py       # OpenAI embeddings instance (text-embedding-3-small)
-  store.py            # StoreManager (InMemoryStore) + checkpointer (PostgresSaver or MemorySaver)
+  store.py            # StoreManager + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
   state.py            # ChatBotState TypedDict
-  structures.py       # UserMemory Pydantic model
+  structures.py       # UserMemory Pydantic model for structured fact extraction
   config.py           # Loads .env with override=True
   models.py           # LLM and embedding model name constants
   logger.py           # Shared get_logger() factory
   nodes/
     retrieve_memories.py  # Searches store for user facts via StoreManager
-    chatbot.py            # Invokes LLM with memory context
+    chatbot.py            # Invokes LLM with memory context and trimmed message history
     extract_and_save.py   # Extracts and stores new facts via StoreManager
 main.py               # Entry point
 ```
 
 ## Setup
 
-1. Clone the repo and create a virtual environment:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-Or with `uv`:
+1. Clone the repo and install dependencies with `uv`:
 
 ```bash
 uv sync
@@ -69,24 +61,51 @@ python main.py
 | Variable | Required | Description |
 |---|---|---|
 | `OPENAI_API_KEY` | Yes | Used for the LLM (GPT-4o) and embeddings (text-embedding-3-small) |
-| `DATABASE_URL` | No | Postgres connection string for persistent checkpointing. Falls back to in-memory if unset. |
+| `DATABASE_URL` | No | Postgres connection string. Falls back to in-memory if unset. |
+| `LANGSMITH_TRACING` | No | Set to `true` to enable LangSmith tracing |
+| `LANGSMITH_ENDPOINT` | No | LangSmith API endpoint |
+| `LANGSMITH_API_KEY` | No | LangSmith API key |
+| `LANGSMITH_PROJECT` | No | LangSmith project name |
 
 > `.env` values take precedence over shell environment variables (`override=True`).
 
-## Checkpointing
+## Persistence
 
-By default the graph uses `MemorySaver` (in-memory, lost on restart). To persist conversation history across runs, set `DATABASE_URL` in `.env` and install the Postgres extras:
-
-```bash
-pip install langgraph-checkpoint-postgres "psycopg[binary]"
-```
+Both the **checkpointer** (conversation history) and **store** (extracted memories) use PostgreSQL when `DATABASE_URL` is set, and fall back to in-memory equivalents otherwise.
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 ```
 
-`store.py` will automatically connect, run schema migrations (`saver.setup()`), and use `PostgresSaver`. If the connection fails, it logs a warning and falls back to `MemorySaver`.
+### Checkpointer
+
+| Condition | Backend |
+|---|---|
+| `DATABASE_URL` set and reachable | `PostgresSaver` |
+| Otherwise | `MemorySaver` (lost on restart) |
+
+### Memory store
+
+| Condition | Backend |
+|---|---|
+| `DATABASE_URL` set, pgvector available | `PostgresStore` with vector index (full semantic search) |
+| `DATABASE_URL` set, no pgvector | `PostgresStore` without index (persistent, no semantic search) |
+| No `DATABASE_URL` | `InMemoryStore` with vector index (lost on restart) |
+
+Schema migrations are run automatically on startup (`setup()` on both the saver and the store).
+
+#### pgvector
+
+The vector index in `PostgresStore` requires the [pgvector](https://github.com/pgvector/pgvector) extension. If it is not installed, the store falls back to `PostgresStore` without an index — facts are still persisted but semantic deduplication and retrieval are disabled.
+
+To install pgvector on Postgres:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
 ## Memory deduplication
 
-`StoreManager.save()` performs a semantic similarity search before writing each new fact. If an existing memory scores `>= 0.90` against the candidate fact, the write is skipped. Duplicate skips are logged at `DEBUG` level — set `LOG_LEVEL=DEBUG` or change the level in `ai/logger.py` to see them.
+`StoreManager.save()` performs a semantic similarity search before writing each new fact. If an existing memory scores `>= 0.90` against the candidate fact, the write is skipped. This requires the vector index (pgvector or InMemoryStore) — when running without an index, deduplication is skipped and all extracted facts are written.
+
+Duplicate skips are logged at `DEBUG` level. To see them, set `LOG_LEVEL=DEBUG` in your environment or adjust the level in `ai/logger.py`.
