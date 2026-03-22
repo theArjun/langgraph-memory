@@ -39,6 +39,19 @@ class StoreManager:
             return []
         return self._store.search(self._namespace(user_id), query=query, limit=limit)
 
+    def update(self, user_id: str, key: str, new_fact: str) -> None:
+        now = datetime.now()
+        self._store.put(
+            namespace=self._namespace(user_id),
+            key=key,
+            value={"text": new_fact, "timestamp": now.isoformat(), "source": "conversation"},
+        )
+        logger.info("Updated memory %s for %s: %s", key, user_id, new_fact)
+
+    def delete(self, user_id: str, key: str) -> None:
+        self._store.delete(namespace=self._namespace(user_id), key=key)
+        logger.info("Deleted memory %s for %s", key, user_id)
+
     def save(self, user_id: str, fact: str) -> bool:
         if not fact or not user_id:
             return False

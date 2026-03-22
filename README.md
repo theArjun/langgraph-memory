@@ -4,14 +4,16 @@ A conversational AI chatbot that extracts and persists facts about users across 
 
 ## How it works
 
-Each conversation runs through a three-node graph:
+Each conversation runs through a six-node graph:
 
 ![Graph](graph.png)
 
-1. **retrieve_memories** — searches the store for previously saved facts about the user using semantic similarity; passes `user_query` as the search query for better relevance
-2. **chatbot** — calls GPT-4o with the retrieved memory context and `user_query` to produce a personalized response
-3. **extract_and_save** — uses structured output to extract new facts from the last exchange (`user_query` + last AI response) and saves them to the store
-4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+1. **retrieve_memories** — searches the store for previously saved facts about the user using `user_query` as the semantic search query
+2. **update_memory** — detects if the user is correcting an existing fact; if so, overwrites the matching memory by key
+3. **delete_memory** — detects if the user wants to forget something; if so, removes the matching memories by key
+4. **chatbot** — calls GPT-4o with the retrieved memory context and `user_query` to produce a personalized response
+5. **extract_and_save** — uses structured output to extract new facts from `user_query` + last AI response and saves them to the store
+6. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
 
@@ -22,9 +24,9 @@ ai/
   graph.py            # GraphManager singleton — builds and compiles the graph
   llm.py              # ChatOpenAI instance (GPT-4o)
   embeddings.py       # OpenAI embeddings instance (text-embedding-3-small)
-  store.py            # StoreManager + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
+  store.py            # StoreManager (save/update/delete/search) + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
   state.py            # ChatBotState TypedDict (messages capped at last 3 via custom reducer)
-  structures.py       # UserMemory Pydantic model for structured fact extraction
+  structures.py       # Pydantic models: UserMemory, MemoryUpdate, MemoryDelete
   config.py           # Loads .env with override=True
   models.py           # LLM and embedding model name constants
   logger.py           # Shared get_logger() factory
@@ -32,12 +34,16 @@ ai/
     loader.py             # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
     chatbot.yaml          # System prompt with {% if memory_context %} branch
     extract_and_save.yaml # System + user prompt for fact extraction
+    update_memory.yaml    # System + user prompt for detecting fact corrections
+    delete_memory.yaml    # System + user prompt for detecting forget requests
   nodes/
     retrieve_memories.py  # Searches store for user facts using user_query as the search query
+    update_memory.py      # Detects corrections and overwrites the matching memory by key
+    delete_memory.py      # Detects forget requests and removes matching memories by key
     chatbot.py            # Invokes LLM with memory context; constructs messages from user_query
     extract_and_save.py   # Extracts facts from user_query + last AI response; saves via StoreManager
     clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
-main.py               # Entry point
+main.py               # Entry point — interactive REPL loop
 visualize_graph.py    # Renders the graph as graph.png
 ```
 

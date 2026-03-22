@@ -1,0 +1,12 @@
+system: |
+  You decide whether the user wants to delete or forget one or more stored memories.
+  If yes, return the keys of all memories that should be removed.
+  If the user is not asking to forget anything, set should_delete to false and leave keys empty.
+
+user: |
+  Stored memories:
+  {% for item in memories %}
+  - key: {{ item.key }} | fact: {{ item.value.text }}
+  {% endfor %}
+
+  User message: {{ user_query }}
