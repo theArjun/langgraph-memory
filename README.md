@@ -4,16 +4,26 @@ A conversational AI chatbot that extracts and persists facts about users across 
 
 ## How it works
 
-Each conversation runs through a six-node graph:
+Each conversation runs through the following graph:
 
 ![Graph](graph.png)
 
-1. **retrieve_memories** — searches the store for previously saved facts about the user using `user_query` as the semantic search query
-2. **update_memory** — detects if the user is correcting an existing fact; if so, overwrites the matching memory by key
-3. **delete_memory** — detects if the user wants to forget something; if so, removes the matching memories by key
-4. **chatbot** — calls GPT-4o with the retrieved memory context and `user_query` to produce a personalized response
-5. **extract_and_save** — uses structured output to extract new facts from `user_query` + last AI response and saves them to the store
-6. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+1. **retrieve_memories** — searches the store for previously saved facts about the user using `user_query` as the semantic search query; memory context includes memory keys so the LLM can reference them in tool calls
+2. **chatbot** — calls GPT-4o (with tools bound) using the retrieved memory context and `user_query`; on re-entry after tool execution, appends tool call/result messages so the LLM can produce a final response
+3. **tools** *(conditional)* — executes `update_memory` or `delete_memory` tool calls made by the chatbot, then loops back to chatbot for the final response
+4. **extract_and_save** — uses structured output to extract new facts from `user_query` + last AI response and saves them to the store
+5. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+
+### Memory tools
+
+The chatbot has two tools it can call when the user's intent requires it:
+
+| Tool | Description |
+|---|---|
+| `update_memory(key, updated_fact)` | Overwrites an existing memory. Called when the user corrects previously stored information. |
+| `delete_memory(key)` | Removes a stored memory. Called when the user explicitly asks to forget something. |
+
+Tools are only invoked when needed — normal conversation turns make no tool calls.
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
 
@@ -27,6 +37,7 @@ ai/
   store.py            # StoreManager (save/update/delete/search) + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
   state.py            # ChatBotState TypedDict (messages capped at last 3 via custom reducer)
   structures.py       # Pydantic models: UserMemory, MemoryUpdate, MemoryDelete
+  tools.py            # LangChain @tool definitions: update_memory, delete_memory
   config.py           # Loads .env with override=True
   models.py           # LLM and embedding model name constants
   logger.py           # Shared get_logger() factory
@@ -34,13 +45,9 @@ ai/
     loader.py             # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
     chatbot.yaml          # System prompt with {% if memory_context %} branch
     extract_and_save.yaml # System + user prompt for fact extraction
-    update_memory.yaml    # System + user prompt for detecting fact corrections
-    delete_memory.yaml    # System + user prompt for detecting forget requests
   nodes/
-    retrieve_memories.py  # Searches store for user facts using user_query as the search query
-    update_memory.py      # Detects corrections and overwrites the matching memory by key
-    delete_memory.py      # Detects forget requests and removes matching memories by key
-    chatbot.py            # Invokes LLM with memory context; constructs messages from user_query
+    retrieve_memories.py  # Searches store; formats context with memory keys for tool use
+    chatbot.py            # Invokes LLM with tools bound; handles tool re-entry loop
     extract_and_save.py   # Extracts facts from user_query + last AI response; saves via StoreManager
     clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
 main.py               # Entry point — interactive REPL loop
