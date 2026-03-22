@@ -1,10 +1,8 @@
-from langchain.embeddings import init_embeddings
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.store.memory import InMemoryStore
 
-from .config import get_openai_api_key
-from .models import EmbeddingModels, Providers
+from .embeddings import embeddings
 from .nodes import chatbot, extract_and_save, retrieve_memories
 from .state import ChatBotState
 
@@ -27,14 +25,9 @@ builder.add_edge(GraphNodes.CHATBOT, GraphNodes.EXTRACT_AND_SAVE)
 builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, END)
 
 checkpointer = MemorySaver()
-store_embeddings = init_embeddings(
-    model=EmbeddingModels.TEXT_EMBEDDING_3_SMALL,
-    provider=Providers.OPENAI,
-    api_key=get_openai_api_key(),
-)
 store = InMemoryStore(
     index={
-        "embed": store_embeddings,
+        "embed": embeddings,
         "dims": 1536,
         "fields": ["text", "$"],
     }
