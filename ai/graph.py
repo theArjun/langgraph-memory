@@ -1,10 +1,9 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.store.memory import InMemoryStore
 
-from .embeddings import embeddings
 from .nodes import chatbot, extract_and_save, retrieve_memories
 from .state import ChatBotState
+from .store import store
 
 
 class GraphNodes:
@@ -25,13 +24,6 @@ builder.add_edge(GraphNodes.CHATBOT, GraphNodes.EXTRACT_AND_SAVE)
 builder.add_edge(GraphNodes.EXTRACT_AND_SAVE, END)
 
 checkpointer = MemorySaver()
-store = InMemoryStore(
-    index={
-        "embed": embeddings,
-        "dims": 1536,
-        "fields": ["text", "$"],
-    }
-)
 
 
 graph = builder.compile(checkpointer=checkpointer, store=store)
