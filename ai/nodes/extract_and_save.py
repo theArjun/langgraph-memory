@@ -12,16 +12,13 @@ logger = get_logger(__name__)
 def extract_and_save(state: ChatBotState, config: RunnableConfig):
     user_id = config["configurable"]["user_id"]
 
-    if len(state["messages"]) < 2:
-        return state
-
+    user_query = state.get("user_query")
     ai_responses = [m for m in state["messages"] if m.type == "ai"]
-    user_messages = [m for m in state["messages"] if m.type == "human"]
 
-    if not ai_responses or not user_messages:
+    if not user_query or not ai_responses:
         return state
 
-    last_user_message = user_messages[-1].content
+    last_user_message = user_query
     last_ai_response = ai_responses[-1].content
 
     extract_prompt = f"""Look at this conversation and extract any facts worth remembering about the user.
