@@ -3,6 +3,7 @@ from typing import Union
 
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.memory import InMemoryStore
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.postgres import PostgresStore
 from psycopg import connect
 from psycopg.rows import dict_row
@@ -104,8 +105,8 @@ def _build_store() -> tuple[Union[InMemoryStore, PostgresStore], bool]:
 def _build_checkpointer():
     db_url = get_database_url()
     if not db_url:
-        logger.info("No DATABASE_URL set, defaulting to MemorySaver (in-memory)")
-        return MemorySaver()
+        logger.info("No DATABASE_URL set, defaulting to InMemorySaver (in-memory)")
+        return InMemorySaver()
 
     logger.info("DATABASE_URL detected, attempting PostgresSaver connection")
     try:
@@ -115,8 +116,10 @@ def _build_checkpointer():
         logger.info("Checkpointer: PostgresSaver (connected to Postgres)")
         return saver
     except Exception as e:
-        logger.warning("PostgresSaver init failed (%s), falling back to MemorySaver", e)
-        return MemorySaver()
+        logger.warning(
+            "PostgresSaver init failed (%s), falling back to InMemorySaver", e
+        )
+        return InMemorySaver()
 
 
 _store, _has_index = _build_store()

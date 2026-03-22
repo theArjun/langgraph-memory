@@ -1,5 +1,4 @@
-from langchain.messages import SystemMessage
-from langchain_core.messages import trim_messages
+from langchain.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from ..llm import llm
@@ -14,6 +13,7 @@ MAX_TOKENS = 100_000
 def chatbot(state: ChatBotState, config: RunnableConfig):
     config["configurable"]["user_id"]
     memory_context = state.get("memory_context", {})
+    user_query = state.get("user_query")
 
     if memory_context:
         system_prompt = f"""You're a helpful assistant with memory of past conversations.
@@ -26,18 +26,9 @@ def chatbot(state: ChatBotState, config: RunnableConfig):
         system_prompt = """You're a helpful assistant. This is your first conversation with this user. Be natural and conversational.
         """
 
-    trimmed = trim_messages(
-        state["messages"],
-        max_tokens=MAX_TOKENS,
-        token_counter=llm,
-        strategy="last",
-        include_system=False,
-        allow_partial=False,
-    )
-
     messages = [
         SystemMessage(content=system_prompt),
-        *trimmed,
+        HumanMessage(content=user_query),
     ]
 
     logger.info(

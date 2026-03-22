@@ -10,8 +10,9 @@ logger = get_logger(__name__)
 def retrieve_memories(state: ChatBotState, config: RunnableConfig):
     user_id = config["configurable"]["user_id"]
 
+    user_query = state.get("user_query", "")
     memories = store_manager.search(
-        user_id, query="What are the facts about this user?"
+        user_id, query=user_query or "What are the facts about this user?"
     )
 
     memory_context = ""

@@ -1,4 +1,3 @@
-from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 from langsmith import traceable
 
@@ -46,7 +45,7 @@ class GraphManager:
         logger.info("Invoking graph for user=%s thread=%s", user_id, thread_id)
         config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
         result = self._graph.invoke(
-            {"messages": [HumanMessage(content=message)]},
+            {"user_query": message},
             config=config,
         )
         return result["messages"][-1].content
