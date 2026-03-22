@@ -21,14 +21,13 @@ def retrieve_memories(query: str, config: RunnableConfig) -> str:
 
 
 @tool
-def update_memory(key: str, updated_fact: str, config: RunnableConfig) -> str:
+def update_memory(updated_fact: str, config: RunnableConfig) -> str:
     """Update an existing memory with a corrected fact.
-    Use when the user corrects or changes previously stored information.
-    'key' must be the exact memory key shown in the conversation context."""
+    Use when the user corrects or changes previously stored information."""
     user_id = config["configurable"]["user_id"]
-    store_manager.update(user_id, key, updated_fact)
-    logger.info("Tool: updated memory key=%s for user=%s", key, user_id)
-    return f"Updated memory '{key}' to: {updated_fact}"
+    store_manager.save(user_id, updated_fact)
+    logger.info("Tool: update_memory for user=%s fact=%s", user_id, updated_fact)
+    return f"Updated: {updated_fact}"
 
 
 @tool

@@ -39,19 +39,6 @@ class StoreManager:
             return []
         return self._store.search(self._namespace(user_id), query=query, limit=limit)
 
-    def update(self, user_id: str, key: str, new_fact: str) -> None:
-        now = datetime.now()
-        self._store.put(
-            namespace=self._namespace(user_id),
-            key=key,
-            value={
-                "text": new_fact,
-                "timestamp": now.isoformat(),
-                "source": "conversation",
-            },
-        )
-        logger.info("Updated memory %s for %s: %s", key, user_id, new_fact)
-
     def delete(self, user_id: str, key: str) -> None:
         self._store.delete(namespace=self._namespace(user_id), key=key)
         logger.info("Deleted memory %s for %s", key, user_id)
@@ -60,21 +47,27 @@ class StoreManager:
         if not fact or not user_id:
             return False
 
+        now = datetime.now()
+        key = None
+
         if self._has_index:
             similar = self._store.search(self._namespace(user_id), query=fact, limit=1)
             if similar and similar[0].score >= SIMILARITY_THRESHOLD:
+                key = similar[0].key
                 logger.debug(
-                    "Skipping duplicate fact for %s (score=%.2f): %s",
+                    "Updating duplicate fact for %s (score=%.2f) under key=%s: %s",
                     user_id,
                     similar[0].score,
+                    key,
                     fact,
                 )
-                return False
 
-        now = datetime.now()
+        if key is None:
+            key = f"memory_{now.strftime('%Y%m%d_T%H%M%S')}"
+
         self._store.put(
             namespace=self._namespace(user_id),
-            key=f"memory_{now.strftime('%Y%m%d_T%H%M%S')}",
+            key=key,
             value={
                 "text": fact,
                 "timestamp": now.isoformat(),
