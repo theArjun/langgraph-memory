@@ -21,9 +21,7 @@ def clear_checkpoints(state: ChatBotState, config: RunnableConfig):
             cur.execute(
                 "DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,)
             )
-            cur.execute(
-                "DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,)
-            )
+            cur.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
 
     logger.info("Cleared checkpoints for thread_id=%s", thread_id)
     return state

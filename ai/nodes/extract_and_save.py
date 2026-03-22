@@ -1,7 +1,9 @@
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from ..llm import llm
 from ..logger import get_logger
+from ..prompts import load_prompt
 from ..state import ChatBotState
 from ..store import store_manager
 from ..structures import UserMemory
@@ -18,30 +20,13 @@ def extract_and_save(state: ChatBotState, config: RunnableConfig):
     if not user_query or not ai_responses:
         return state
 
-    last_user_message = user_query
     last_ai_response = ai_responses[-1].content
 
-    extract_prompt = f"""Look at this conversation and extract any facts worth remembering about the user.
-
-    User: {last_user_message}
-    Assistant: {last_ai_response}
-
-    List each fact on a new line starting with a dash (-).
-    Only include clear, factual information about the USER (not about the assistant).
-    If there are no facts to remember, respond with: NONE
-
-    Examples of good facts:
-    - User's name is Arjun
-    - User works as a software engineer
-    - User enjoys coding
-    - User is learning AI
-
-    Examples of bad facts (don't include these):
-    - The assistant was helpful
-    - We had a conversation
-    - The user asked a question"""
-
-    result = llm.with_structured_output(UserMemory).invoke(extract_prompt)
+    prompt = load_prompt(
+        "extract_and_save", user_query=user_query, ai_response=last_ai_response
+    )
+    messages = [SystemMessage(content=prompt["system"]), HumanMessage(content=prompt["user"])]
+    result = llm.with_structured_output(UserMemory).invoke(messages)
 
     stored_count = sum(
         store_manager.save(user_id, fact) for fact in result.facts if fact
