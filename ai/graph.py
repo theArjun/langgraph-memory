@@ -1,5 +1,6 @@
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
+from langsmith import traceable
 
 from .logger import get_logger
 from .nodes import chatbot, extract_and_save, retrieve_memories
@@ -40,6 +41,7 @@ class GraphManager:
             cls._instance._graph = _build_graph()
         return cls._instance
 
+    @traceable
     def invoke(self, user_id: str, thread_id: str, message: str) -> str:
         logger.info("Invoking graph for user=%s thread=%s", user_id, thread_id)
         config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}

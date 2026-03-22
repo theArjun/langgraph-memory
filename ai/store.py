@@ -1,17 +1,15 @@
 from datetime import datetime
 from typing import Union
 
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.memory import InMemoryStore
 from langgraph.store.postgres import PostgresStore
+from psycopg import connect
+from psycopg.rows import dict_row
 
 from .config import get_database_url
 from .embeddings import embeddings
 from .logger import get_logger
-
-from psycopg import connect
-from psycopg.rows import dict_row
-from langgraph.checkpoint.postgres import PostgresSaver
 
 logger = get_logger(__name__)
 
@@ -26,7 +24,9 @@ _INDEX_CONFIG = {
 
 
 class StoreManager:
-    def __init__(self, store: Union[InMemoryStore, PostgresStore], has_index: bool = True):
+    def __init__(
+        self, store: Union[InMemoryStore, PostgresStore], has_index: bool = True
+    ):
         self._store = store
         self._has_index = has_index
 
@@ -83,7 +83,9 @@ def _build_store() -> tuple[Union[InMemoryStore, PostgresStore], bool]:
         logger.info("Store: PostgresStore with vector index (pgvector enabled)")
         return store, True
     except Exception as e:
-        logger.warning("PostgresStore with index failed (%s), retrying without vector index", e)
+        logger.warning(
+            "PostgresStore with index failed (%s), retrying without vector index", e
+        )
 
     # Retry without index (pgvector not available)
     try:
@@ -93,7 +95,9 @@ def _build_store() -> tuple[Union[InMemoryStore, PostgresStore], bool]:
         logger.warning("Store: PostgresStore without vector index (no semantic search)")
         return store, False
     except Exception as e:
-        logger.warning("PostgresStore init failed (%s), falling back to InMemoryStore", e)
+        logger.warning(
+            "PostgresStore init failed (%s), falling back to InMemoryStore", e
+        )
         return InMemoryStore(index=_INDEX_CONFIG), True
 
 
