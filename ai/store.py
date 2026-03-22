@@ -27,6 +27,9 @@ class StoreManager:
         return self._store.search(self._namespace(user_id), query=query, limit=limit)
 
     def save(self, user_id: str, fact: str) -> bool:
+        if not fact or not user_id:
+            return False
+
         similar = self._store.search(self._namespace(user_id), query=fact, limit=1)
         if similar and similar[0].score >= SIMILARITY_THRESHOLD:
             logger.debug(
@@ -64,19 +67,20 @@ store_manager = StoreManager(_store)
 
 def _build_checkpointer():
     db_url = get_database_url()
-    if db_url:
-        try:
-            conn = connect(db_url, autocommit=True, row_factory=dict_row)
-            saver = PostgresSaver(conn)
-            saver.setup()
-            logger.info("Checkpointer: PostgresSaver (connected to Postgres)")
-            return saver
-        except Exception as e:
-            logger.warning(
-                "PostgresSaver init failed (%s), falling back to MemorySaver", e
-            )
-    logger.info("Checkpointer: MemorySaver (in-memory)")
-    return MemorySaver()
+    if not db_url:
+        logger.info("No DATABASE_URL set, defaulting to MemorySaver (in-memory)")
+        return MemorySaver()
+
+    logger.info("DATABASE_URL detected, attempting PostgresSaver connection")
+    try:
+        conn = connect(db_url, autocommit=True, row_factory=dict_row)
+        saver = PostgresSaver(conn)
+        saver.setup()
+        logger.info("Checkpointer: PostgresSaver (connected to Postgres)")
+        return saver
+    except Exception as e:
+        logger.warning("PostgresSaver init failed (%s), falling back to MemorySaver", e)
+        return MemorySaver()
 
 
 checkpointer = _build_checkpointer()
