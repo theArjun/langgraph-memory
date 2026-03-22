@@ -119,7 +119,7 @@ def _build_store() -> tuple[Union[InMemoryStore, PostgresStore], bool]:
         return InMemoryStore(index=_INDEX_CONFIG), True
 
 
-def _build_checkpointer():
+def _build_checkpointer() -> Union[PostgresSaver, InMemorySaver]:
     db_url = get_database_url()
     if not db_url:
         logger.info("No DATABASE_URL set, defaulting to InMemorySaver (in-memory)")
@@ -139,11 +139,25 @@ def _build_checkpointer():
         return InMemorySaver()
 
 
+def delete_thread(thread_id: str) -> None:
+    db_url = get_database_url()
+    if not db_url:
+        return
+    with connect(db_url, autocommit=True, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,)
+            )
+            cur.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
+    logger.info("Deleted checkpoint for thread_id=%s", thread_id)
+
+
 _store, _has_index = _build_store()
 store_manager = StoreManager(_store, _has_index)
 checkpointer = _build_checkpointer()
 
 __all__ = [
-    "store_manager",
     "checkpointer",
+    "delete_thread",
+    "store_manager",
 ]

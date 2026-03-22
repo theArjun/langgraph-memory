@@ -3,9 +3,9 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from .logger import get_logger
-from .nodes import chatbot, chatbot_router, clear_checkpoints
+from .nodes import chatbot, chatbot_router
 from .state import ChatBotState
-from .store import checkpointer, store_manager
+from .store import checkpointer, delete_thread, store_manager
 from .tools import memory_tools
 
 logger = get_logger(__name__)
@@ -14,7 +14,6 @@ logger = get_logger(__name__)
 class GraphNodes:
     CHATBOT = "chatbot"
     TOOLS = "tools"
-    CLEAR_CHECKPOINTS = "clear_checkpoints"
 
 
 def _build_graph():
@@ -23,7 +22,6 @@ def _build_graph():
 
     builder.add_node(GraphNodes.CHATBOT, chatbot)
     builder.add_node(GraphNodes.TOOLS, ToolNode(memory_tools))
-    builder.add_node(GraphNodes.CLEAR_CHECKPOINTS, clear_checkpoints)
 
     builder.add_edge(START, GraphNodes.CHATBOT)
     builder.add_conditional_edges(
@@ -31,11 +29,10 @@ def _build_graph():
         chatbot_router,
         {
             chatbot_router.TOOLS: GraphNodes.TOOLS,
-            chatbot_router.CLEAR_CHECKPOINTS: GraphNodes.CLEAR_CHECKPOINTS,
+            chatbot_router.END: END,
         },
     )
     builder.add_edge(GraphNodes.TOOLS, GraphNodes.CHATBOT)
-    builder.add_edge(GraphNodes.CLEAR_CHECKPOINTS, END)
 
     return builder.compile(checkpointer=checkpointer, store=store_manager._store)
 
@@ -57,6 +54,7 @@ class GraphManager:
             {"user_query": message},
             config=config,
         )
+        delete_thread(thread_id)
         return result["messages"][-1].content
 
 

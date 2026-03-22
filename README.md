@@ -9,9 +9,10 @@ Each conversation runs through the following graph:
 ![Graph](graph.png)
 
 1. **chatbot** — calls GPT-4o with all four memory tools available; decides dynamically whether to retrieve, save, update, or delete memories based on the user's message
-2. **`ChatbotRouter`** *(conditional edge)* — inspects the last message; returns `"tools"` if the chatbot made tool calls, otherwise `"clear_checkpoints"`
+2. **`ChatbotRouter`** *(conditional edge)* — returns `"tools"` if the chatbot made tool calls, otherwise routes to `END`
 3. **tools** — executes whichever tool(s) the chatbot called, then loops back to chatbot for the final response
-4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+
+After the graph completes, `delete_thread(thread_id)` is called directly in `GraphManager.invoke()` to clear the checkpoint rows, keeping the checkpointer table lean without requiring a dedicated node.
 
 ### Memory tools
 
@@ -30,10 +31,10 @@ Facts are stored under a per-user namespace `(user_id, "memories")` and embedded
 
 ```
 ai/
-  graph.py            # GraphManager singleton — builds and compiles the graph
+  graph.py            # GraphManager singleton — builds graph; calls delete_thread after each invoke
   llm.py              # ChatOpenAI instance (GPT-4o)
   embeddings.py       # OpenAI embeddings instance (text-embedding-3-small)
-  store.py            # StoreManager (save/update/delete/search) + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
+  store.py            # StoreManager (save/update/delete/search) + delete_thread() + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
   state.py            # ChatBotState TypedDict (messages capped at last 20 via custom reducer)
   structures.py       # Pydantic models for structured LLM output
   tools.py            # LangChain @tool definitions: retrieve_memories, save_memory, update_memory, delete_memory
@@ -44,9 +45,8 @@ ai/
     loader.py         # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
     chatbot.yaml      # System prompt listing available memory tools
   nodes/
-    chatbot.py            # Invokes LLM with tools bound; handles tool re-entry loop
-    router.py             # ChatbotRouter — callable with named route constants (TOOLS, CLEAR_CHECKPOINTS)
-    clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
+    chatbot.py        # Invokes LLM with tools bound; handles tool re-entry loop
+    router.py         # ChatbotRouter — callable with route constants (TOOLS, END)
 main.py               # Entry point — interactive REPL loop
 visualize_graph.py    # Renders the graph as graph.png
 ```
