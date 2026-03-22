@@ -44,7 +44,11 @@ class StoreManager:
         self._store.put(
             namespace=self._namespace(user_id),
             key=key,
-            value={"text": new_fact, "timestamp": now.isoformat(), "source": "conversation"},
+            value={
+                "text": new_fact,
+                "timestamp": now.isoformat(),
+                "source": "conversation",
+            },
         )
         logger.info("Updated memory %s for %s: %s", key, user_id, new_fact)
 

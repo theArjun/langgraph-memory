@@ -18,7 +18,8 @@ def retrieve_memories(state: ChatBotState, config: RunnableConfig):
     memory_context = ""
     if memories:
         memory_texts = [
-            f"{i}. {m.value.get('text', '')}" for i, m in enumerate(memories, start=1)
+            f"{i}. [key={m.key}] {m.value.get('text', '')}"
+            for i, m in enumerate(memories, start=1)
         ]
         memory_context = "\n".join(memory_texts)
 
