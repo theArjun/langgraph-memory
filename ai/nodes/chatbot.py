@@ -23,11 +23,20 @@ def chatbot(state: ChatBotState, config: RunnableConfig):
         HumanMessage(content=user_query),
     ]
 
-    # On re-entry after tool calls, append tool call/result messages
-    # so the LLM can see what it called and produce a final response.
-    for msg in state.get("messages", []):
-        if (hasattr(msg, "tool_calls") and msg.tool_calls) or msg.type == "tool":
-            messages.append(msg)
+    # On re-entry after tool calls, append the current turn's tool call/result
+    # messages so the LLM can produce a final response.
+    # Walk backwards and collect only the contiguous block at the tail:
+    # ToolMessages, then the AIMessage(tool_calls) that triggered them.
+    tail = []
+    for msg in reversed(state.get("messages", [])):
+        if msg.type == "tool":
+            tail.insert(0, msg)
+        elif hasattr(msg, "tool_calls") and msg.tool_calls:
+            tail.insert(0, msg)
+            break
+        else:
+            break
+    messages.extend(tail)
 
     logger.info("Invoking LLM for user=%s", user_id)
     response = _llm_with_tools.invoke(messages)

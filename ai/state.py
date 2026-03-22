@@ -2,7 +2,7 @@ from typing import Annotated, TypedDict
 
 from langchain.messages import AnyMessage
 
-MAX_MESSAGES = 3
+MAX_MESSAGES = 20
 
 
 def _keep_last(existing: list, new: list) -> list:
