@@ -18,29 +18,40 @@ logger = get_logger(__name__)
 SIMILARITY_THRESHOLD = 0.90
 
 
+_INDEX_CONFIG = {
+    "embed": embeddings,
+    "dims": 1536,
+    "fields": ["text", "$"],
+}
+
+
 class StoreManager:
-    def __init__(self, store: Union[InMemoryStore, PostgresStore]):
+    def __init__(self, store: Union[InMemoryStore, PostgresStore], has_index: bool = True):
         self._store = store
+        self._has_index = has_index
 
     def _namespace(self, user_id: str) -> tuple:
         return (user_id, "memories")
 
     def search(self, user_id: str, query: str, limit: int = 10) -> list:
+        if not self._has_index:
+            return []
         return self._store.search(self._namespace(user_id), query=query, limit=limit)
 
     def save(self, user_id: str, fact: str) -> bool:
         if not fact or not user_id:
             return False
 
-        similar = self._store.search(self._namespace(user_id), query=fact, limit=1)
-        if similar and similar[0].score >= SIMILARITY_THRESHOLD:
-            logger.debug(
-                "Skipping duplicate fact for %s (score=%.2f): %s",
-                user_id,
-                similar[0].score,
-                fact,
-            )
-            return False
+        if self._has_index:
+            similar = self._store.search(self._namespace(user_id), query=fact, limit=1)
+            if similar and similar[0].score >= SIMILARITY_THRESHOLD:
+                logger.debug(
+                    "Skipping duplicate fact for %s (score=%.2f): %s",
+                    user_id,
+                    similar[0].score,
+                    fact,
+                )
+                return False
 
         now = datetime.now()
         self._store.put(
@@ -56,41 +67,34 @@ class StoreManager:
         return True
 
 
-def _build_store() -> Union[InMemoryStore, PostgresStore]:
+def _build_store() -> tuple[Union[InMemoryStore, PostgresStore], bool]:
     db_url = get_database_url()
     if not db_url:
         logger.info("No DATABASE_URL set, defaulting to InMemoryStore")
-        return InMemoryStore(
-            index={
-                "embed": embeddings,
-                "dims": 1536,
-                "fields": ["text", "$"],
-            }
-        )
+        return InMemoryStore(index=_INDEX_CONFIG), True
 
     logger.info("DATABASE_URL detected, attempting PostgresStore connection")
+    conn = connect(db_url, autocommit=True, row_factory=dict_row)
+
+    # Try with vector index first (requires pgvector)
+    try:
+        store = PostgresStore(conn, index=_INDEX_CONFIG)
+        store.setup()
+        logger.info("Store: PostgresStore with vector index (pgvector enabled)")
+        return store, True
+    except Exception as e:
+        logger.warning("PostgresStore with index failed (%s), retrying without vector index", e)
+
+    # Retry without index (pgvector not available)
     try:
         conn = connect(db_url, autocommit=True, row_factory=dict_row)
-        store = PostgresStore(
-            conn,
-            index={
-                "embed": embeddings,
-                "dims": 1536,
-                "fields": ["text", "$"],
-            },
-        )
+        store = PostgresStore(conn)
         store.setup()
-        logger.info("Store: PostgresStore (connected to Postgres)")
-        return store
+        logger.warning("Store: PostgresStore without vector index (no semantic search)")
+        return store, False
     except Exception as e:
         logger.warning("PostgresStore init failed (%s), falling back to InMemoryStore", e)
-        return InMemoryStore(
-            index={
-                "embed": embeddings,
-                "dims": 1536,
-                "fields": ["text", "$"],
-            }
-        )
+        return InMemoryStore(index=_INDEX_CONFIG), True
 
 
 def _build_checkpointer():
@@ -111,8 +115,8 @@ def _build_checkpointer():
         return MemorySaver()
 
 
-_store = _build_store()
-store_manager = StoreManager(_store)
+_store, _has_index = _build_store()
+store_manager = StoreManager(_store, _has_index)
 checkpointer = _build_checkpointer()
 
 __all__ = [
