@@ -8,9 +8,9 @@ Each conversation runs through a three-node graph:
 
 ![Graph](graph.png)
 
-1. **retrieve_memories** — searches the store for previously saved facts about the user using semantic similarity
-2. **chatbot** — calls GPT-4o with the retrieved memory context to produce a personalized response
-3. **extract_and_save** — uses structured output to extract new facts from the last exchange and saves them to the store
+1. **retrieve_memories** — searches the store for previously saved facts about the user using semantic similarity; passes `user_query` as the search query for better relevance
+2. **chatbot** — calls GPT-4o with the retrieved memory context and `user_query` to produce a personalized response
+3. **extract_and_save** — uses structured output to extract new facts from the last exchange (`user_query` + last AI response) and saves them to the store
 4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
 
 Facts are stored under a per-user namespace `(user_id, "memories")` and embedded with `text-embedding-3-small` for semantic retrieval. Before saving, each new fact is checked against existing memories using a similarity threshold (`0.90`) to avoid storing duplicates.
@@ -23,15 +23,19 @@ ai/
   llm.py              # ChatOpenAI instance (GPT-4o)
   embeddings.py       # OpenAI embeddings instance (text-embedding-3-small)
   store.py            # StoreManager + PostgresStore/InMemoryStore + PostgresSaver/MemorySaver
-  state.py            # ChatBotState TypedDict
+  state.py            # ChatBotState TypedDict (messages capped at last 3 via custom reducer)
   structures.py       # UserMemory Pydantic model for structured fact extraction
   config.py           # Loads .env with override=True
   models.py           # LLM and embedding model name constants
   logger.py           # Shared get_logger() factory
+  prompts/
+    loader.py             # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
+    chatbot.yaml          # System prompt with {% if memory_context %} branch
+    extract_and_save.yaml # System + user prompt for fact extraction
   nodes/
-    retrieve_memories.py  # Searches store for user facts via StoreManager
-    chatbot.py            # Invokes LLM with memory context
-    extract_and_save.py   # Extracts and stores new facts via StoreManager
+    retrieve_memories.py  # Searches store for user facts using user_query as the search query
+    chatbot.py            # Invokes LLM with memory context; constructs messages from user_query
+    extract_and_save.py   # Extracts facts from user_query + last AI response; saves via StoreManager
     clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
 main.py               # Entry point
 visualize_graph.py    # Renders the graph as graph.png

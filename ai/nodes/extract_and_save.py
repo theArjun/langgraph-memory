@@ -25,7 +25,10 @@ def extract_and_save(state: ChatBotState, config: RunnableConfig):
     prompt = load_prompt(
         "extract_and_save", user_query=user_query, ai_response=last_ai_response
     )
-    messages = [SystemMessage(content=prompt["system"]), HumanMessage(content=prompt["user"])]
+    messages = [
+        SystemMessage(content=prompt["system"]),
+        HumanMessage(content=prompt["user"]),
+    ]
     result = llm.with_structured_output(UserMemory).invoke(messages)
 
     stored_count = sum(
