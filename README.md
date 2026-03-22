@@ -6,9 +6,7 @@ A conversational AI chatbot that extracts and persists facts about users across 
 
 Each conversation runs through a three-node graph:
 
-```
-retrieve_memories → chatbot → extract_and_save
-```
+![Graph](graph.png)
 
 1. **retrieve_memories** — searches the store for previously saved facts about the user using semantic similarity
 2. **chatbot** — calls GPT-4o with the retrieved memory context to produce a personalized response; message history is trimmed to 100k tokens before sending to avoid context overflow
