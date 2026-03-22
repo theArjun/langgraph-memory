@@ -1,7 +1,9 @@
 from datetime import datetime
+from typing import Union
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.store.memory import InMemoryStore
+from langgraph.store.postgres import PostgresStore
 
 from .config import get_database_url
 from .embeddings import embeddings
@@ -17,7 +19,7 @@ SIMILARITY_THRESHOLD = 0.90
 
 
 class StoreManager:
-    def __init__(self, store: InMemoryStore):
+    def __init__(self, store: Union[InMemoryStore, PostgresStore]):
         self._store = store
 
     def _namespace(self, user_id: str) -> tuple:
@@ -54,15 +56,41 @@ class StoreManager:
         return True
 
 
-_store = InMemoryStore(
-    index={
-        "embed": embeddings,
-        "dims": 1536,
-        "fields": ["text", "$"],
-    }
-)
+def _build_store() -> Union[InMemoryStore, PostgresStore]:
+    db_url = get_database_url()
+    if not db_url:
+        logger.info("No DATABASE_URL set, defaulting to InMemoryStore")
+        return InMemoryStore(
+            index={
+                "embed": embeddings,
+                "dims": 1536,
+                "fields": ["text", "$"],
+            }
+        )
 
-store_manager = StoreManager(_store)
+    logger.info("DATABASE_URL detected, attempting PostgresStore connection")
+    try:
+        conn = connect(db_url, autocommit=True, row_factory=dict_row)
+        store = PostgresStore(
+            conn,
+            index={
+                "embed": embeddings,
+                "dims": 1536,
+                "fields": ["text", "$"],
+            },
+        )
+        store.setup()
+        logger.info("Store: PostgresStore (connected to Postgres)")
+        return store
+    except Exception as e:
+        logger.warning("PostgresStore init failed (%s), falling back to InMemoryStore", e)
+        return InMemoryStore(
+            index={
+                "embed": embeddings,
+                "dims": 1536,
+                "fields": ["text", "$"],
+            }
+        )
 
 
 def _build_checkpointer():
@@ -83,6 +111,8 @@ def _build_checkpointer():
         return MemorySaver()
 
 
+_store = _build_store()
+store_manager = StoreManager(_store)
 checkpointer = _build_checkpointer()
 
 __all__ = [
