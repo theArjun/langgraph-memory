@@ -1,9 +1,15 @@
 from datetime import datetime
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.store.memory import InMemoryStore
 
+from .config import get_database_url
 from .embeddings import embeddings
 from .logger import get_logger
+
+from psycopg import connect
+from psycopg.rows import dict_row
+from langgraph.checkpoint.postgres import PostgresSaver
 
 logger = get_logger(__name__)
 
@@ -55,6 +61,27 @@ _store = InMemoryStore(
 
 store_manager = StoreManager(_store)
 
+
+def _build_checkpointer():
+    db_url = get_database_url()
+    if db_url:
+        try:
+            conn = connect(db_url, autocommit=True, row_factory=dict_row)
+            saver = PostgresSaver(conn)
+            saver.setup()
+            logger.info("Checkpointer: PostgresSaver (connected to Postgres)")
+            return saver
+        except Exception as e:
+            logger.warning(
+                "PostgresSaver init failed (%s), falling back to MemorySaver", e
+            )
+    logger.info("Checkpointer: MemorySaver (in-memory)")
+    return MemorySaver()
+
+
+checkpointer = _build_checkpointer()
+
 __all__ = [
     "store_manager",
+    "checkpointer",
 ]
