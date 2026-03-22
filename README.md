@@ -9,8 +9,9 @@ Each conversation runs through the following graph:
 ![Graph](graph.png)
 
 1. **chatbot** — calls GPT-4o with all four memory tools available; decides dynamically whether to retrieve, save, update, or delete memories based on the user's message
-2. **tools** *(conditional)* — executes whichever tool(s) the chatbot called, then loops back to chatbot for the final response
-3. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
+2. **`ChatbotRouter`** *(conditional edge)* — inspects the last message; returns `"tools"` if the chatbot made tool calls, otherwise `"clear_checkpoints"`
+3. **tools** — executes whichever tool(s) the chatbot called, then loops back to chatbot for the final response
+4. **clear_checkpoints** — deletes the checkpoint rows for the current thread after a successful run, keeping the checkpointer table lean
 
 ### Memory tools
 
@@ -43,7 +44,8 @@ ai/
     loader.py         # load_prompt(name, **kwargs) — loads YAML and renders via Jinja2
     chatbot.yaml      # System prompt listing available memory tools
   nodes/
-    chatbot.py        # Invokes LLM with tools bound; handles tool re-entry loop
+    chatbot.py            # Invokes LLM with tools bound; handles tool re-entry loop
+    router.py             # ChatbotRouter — callable with named route constants (TOOLS, CLEAR_CHECKPOINTS)
     clear_checkpoints.py  # Deletes checkpoint rows for the thread after each successful run
 main.py               # Entry point — interactive REPL loop
 visualize_graph.py    # Renders the graph as graph.png
